@@ -55,10 +55,14 @@ def worker(rank, indices_list, texts, output_dir, upload_dir=None, delete_local=
         audio_id = str(uuid.uuid4())
         text = texts[idx]
         # instruct = random_instruct(42)
-        audio = model.generate(
-            text=text,
-            # instruct=instruct,
-        )
+        try:
+            audio = model.generate(
+                text=text,
+                # instruct=instruct,
+            )
+        except Exception as e:
+            print(e)
+            continue
         audio_path = os.path.join(audios_dir, f"{audio_id}.wav")
         metadata_path = os.path.join(metas_dir, f"{audio_id}.txt")
         sf.write(audio_path, audio[0], 24000)
