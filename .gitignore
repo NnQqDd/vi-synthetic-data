@@ -1,7 +1,10 @@
-dataset/
 .venv/
+*dataset*/
+*synthetic*/
 metadatas/
 *.wav
 *.env
 *.csv
+*.report
+*.note
 temp.py

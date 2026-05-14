@@ -1,6 +1,7 @@
 import warnings; warnings.filterwarnings("ignore")
 import argparse
 import dotenv; dotenv.load_dotenv()
+import random
 import os
 import uuid
 import pandas as pd
@@ -32,11 +33,13 @@ def worker(rank, indices_list, texts, references_records, N, output_dir, upload_
         secret_key=os.getenv("MINIO_SECRET_KEY"),
         secure=False
     )
+    random.seed(42)
     for idx in tqdm(my_indices, desc=f"GPU{rank}", position=rank):
         row = references_records[idx]
         for jdx in range(N):
             audio_id = str(uuid.uuid4())
-            text = texts[idx * N + jdx]
+            # text = texts[idx * N + jdx]
+            text = texts[random.randint(0, len(texts) - 1)]
             audio = model.generate(
                 text=text,
                 ref_audio=row["filepath"],
@@ -65,12 +68,13 @@ def worker(rank, indices_list, texts, references_records, N, output_dir, upload_
 
 def parse_args():
     parser = argparse.ArgumentParser()
-
+    parser.add_argument("--metadata-path", type=str, required=True)
+    parser.add_argument("--text-path", type=str, required=True)
     parser.add_argument("-R", type=int, default=1000, help="Value of R")
     parser.add_argument("-P", type=int, default=0, help="Value of P")
     parser.add_argument("-N", type=int, default=100, help="Value of N")
-    parser.add_argument("-u", type=str, help="Upload Dataset on Minio or not")
-    parser.add_argument("-d", action="store_true", help="Delete local files after uploading to Minio")
+    parser.add_argument("--upload-dir", "-u", type=str, help="Upload Dataset on Minio or not")
+    parser.add_argument("--delete", "-d", action="store_true", help="Delete local files after uploading to Minio")
     args = parser.parse_args()
 
     return args
@@ -78,17 +82,19 @@ def parse_args():
 
 def main():
     args = parse_args()
+    METADATA_PATH = args.metadata_path
+    TEXT_PATH = args.text_path
     R = args.R
     P = args.P
     N = args.N
 
     print(R, P, N)
 
-    df_texts = pd.read_csv("metadatas/PhoMT_training.csv")["vi"]
+    df_texts = pd.read_csv(args.text_path)["vi"]
     print(df_texts.nunique())
     texts = df_texts.tolist()
 
-    df_references = pd.read_csv("metadatas/single_speakers.csv")
+    df_references = pd.read_csv(args.metadata_path) # "[filepath, text, speaker_id]"
     print(df_references.nunique())
 
     os.makedirs("dataset/audios", exist_ok=True)
@@ -109,7 +115,7 @@ def main():
 
     mp.spawn(
         worker,
-        args=(indices_list, texts, references_records, N, "dataset", args.u, args.d),
+        args=(indices_list, texts, references_records, N, "dataset", args.upload_dir, args.delete),
         nprocs=num_gpus,
         join=True,
     )
